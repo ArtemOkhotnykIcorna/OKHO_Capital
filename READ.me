@@ -1,0 +1,288 @@
+🔥 **КРАСА.**
+Тоді фіксуємо **“one-shot інструкцію”** — щоб на **новому сервері** ти **1 раз вставив → 5–10 хв → все працює** і більше не згадував.
+
+Нижче — **бойовий README для самого себе**.
+
+---
+
+# 🚀 OKHO — FIRST SETUP / SERVER BOOTSTRAP
+
+## 0️⃣ Базове (1 раз на сервері)
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y python3 python3-venv python3-pip git curl htop ufw
+```
+
+---
+
+## 1️⃣ Python venv (єдиний на сервер)
+
+```bash
+cd /root
+python3 -m venv venv
+source /root/venv/bin/activate
+pip install --upgrade pip
+pip install fastapi uvicorn pandas numpy requests python-binance
+```
+
+> ⚠️ **ВАЖЛИВО**:
+> ❌ не створювати окремі venv
+> ✅ один `/root/venv` на всі боти (економія RAM)
+
+---
+
+## 2️⃣ Swap (ОБОВʼЯЗКОВО для 1GB RAM)
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Перевірка:
+
+```bash
+free -h
+```
+
+---
+
+## 3️⃣ Структура папок (еталон)
+
+```
+/root
+├── venv
+├── binance/
+│   └── bina.py
+├── binance_low_TP/OKHO_Capital/
+│   └── bina.py
+├── non_DOGE/OKHO_Capital/
+│   └── bina.py
+├── new_version_trail/
+│   └── bot_btc_eth_partial_tp_trail.py
+├── okhostatus.py
+```
+
+---
+
+## 4️⃣ Systemd шаблон (БОТ)
+
+> ⚠️ **один бот = один .service**
+
+### приклад: `okho-prod-bot`
+
+```bash
+sudo tee /etc/systemd/system/okho-prod-bot.service > /dev/null <<'EOF'
+[Unit]
+Description=okho-prod-bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/binance
+ExecStart=/root/venv/bin/python3 /root/binance/bina.py
+
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+MemoryMax=250M
+MemorySwapMax=400M
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+---
+
+## 5️⃣ Systemd шаблон (DASH)
+
+```bash
+sudo tee /etc/systemd/system/okho-prod-dash.service > /dev/null <<'EOF'
+[Unit]
+Description=okho-prod-dash
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/binance
+ExecStart=/root/venv/bin/uvicorn dashprod:app --host 0.0.0.0 --port 9000
+
+Restart=on-failure
+RestartSec=5
+
+MemoryMax=120M
+MemorySwapMax=200M
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+---
+
+## 6️⃣ Trail-bot (окремий файл!)
+
+```bash
+sudo tee /etc/systemd/system/okho-trail-bot.service > /dev/null <<'EOF'
+[Unit]
+Description=okho-trail-bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/new_version_trail
+ExecStart=/root/venv/bin/python3 /root/new_version_trail/bot_btc_eth_partial_tp_trail.py
+
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+MemoryMax=250M
+MemorySwapMax=400M
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+---
+
+## 7️⃣ Status micro-server (з телефону)
+
+```bash
+sudo tee /etc/systemd/system/okho-status.service > /dev/null <<'EOF'
+[Unit]
+Description=OKHO status server
+After=network-online.target
+
+[Service]
+WorkingDirectory=/root
+ExecStart=/root/venv/bin/uvicorn okhostatus:app --host 0.0.0.0 --port 9100
+Restart=always
+MemoryMax=90M
+MemorySwapMax=150M
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+---
+
+## 8️⃣ Активувати ВСЕ
+
+```bash
+sudo systemctl daemon-reload
+
+sudo systemctl enable \
+okho-prod-bot okho-prod-dash \
+okho-lowtp-bot okho-lowtp-dash \
+okho-nodoge-bot okho-nodoge-dash \
+okho-trail-bot okho-trail-dash \
+okho-status
+
+sudo systemctl start \
+okho-prod-bot okho-prod-dash \
+okho-lowtp-bot okho-lowtp-dash \
+okho-nodoge-bot okho-nodoge-dash \
+okho-trail-bot okho-trail-dash \
+okho-status
+```
+
+---
+
+## 9️⃣ 🔥 КОМАНДИ НА КОЖЕН ДЕНЬ
+
+### 🔄 Перезапустити ВСЕ
+
+```bash
+sudo systemctl restart \
+okho-prod-bot okho-prod-dash \
+okho-lowtp-bot okho-lowtp-dash \
+okho-nodoge-bot okho-nodoge-dash \
+okho-trail-bot okho-trail-dash
+```
+
+### 🛑 Повністю зупинити
+
+```bash
+sudo systemctl stop \
+okho-prod-bot okho-prod-dash \
+okho-lowtp-bot okho-lowtp-dash \
+okho-nodoge-bot okho-nodoge-dash \
+okho-trail-bot okho-trail-dash
+```
+
+### 📊 Швидкий статус
+
+```bash
+systemctl --no-pager --type=service | grep okho-
+```
+
+### 📜 Логи
+
+```bash
+journalctl -u okho-prod-bot -n 100 --no-pager
+```
+
+### 🧠 RAM контроль
+
+```bash
+htop
+free -h
+```
+
+---
+
+## 🔐 З ТЕЛЕФОНУ
+
+```
+http://SERVER_IP:9100/text
+http://SERVER_IP:9100/health
+http://SERVER_IP:9100/logs/okho-trail-bot
+```
+
+---
+
+## 🧠 ФІЛОСОФІЯ (чому це стабільно)
+
+* ❌ tmux
+* ❌ 10 venv
+* ❌ безкінечні рестарти
+* ✅ systemd
+* ✅ RAM ліміти
+* ✅ swap
+* ✅ 1 команда = все
+
+---
+
+Якщо хочеш — я можу:
+
+* ✍️ з цього зробити **README.md**
+* 🧩 запакувати в **install.sh**
+* 🔔 додати **Telegram alert**
+* 🧯 додати **auto-disable бота при low RAM**
+
+Ти зараз маєш **дуже правильну прод-машину**, реально 👍
