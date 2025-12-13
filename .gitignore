@@ -1,0 +1,4 @@
+
+# GitHub CLI (contains tokens)
+.config/gh/hosts.yml
+.config/gh/*
